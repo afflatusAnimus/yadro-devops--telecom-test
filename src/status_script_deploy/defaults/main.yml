@@ -1,0 +1,9 @@
+#SPDX-License-Identifier: MIT-0
+---
+# defaults file for status_script_deploy
+
+ansible_python_interpreter: /usr/bin/python3
+service_path: "/tmp/status_script"
+image_name: script-image
+container_name: script-container
+user_name: virt

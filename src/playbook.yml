@@ -1,0 +1,5 @@
+- name: Install and start status script in container
+  hosts: all
+  become: yes
+  roles:
+    - status_script_deploy

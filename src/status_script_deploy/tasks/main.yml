@@ -1,0 +1,110 @@
+#SPDX-License-Identifier: MIT-0
+---
+# tasks file for status_script_deploy
+- name: Create directory for the service
+  file:
+    path: "{{ service_path }}"
+    state: directory
+
+- name: Copy service script
+  copy:
+    src: files/script.py
+    dest: "{{ service_path + '/script.py' }}"
+
+- name: Install dependencies
+  apt:
+    name:
+    - apt-transport-https
+    - ca-certificates
+    - curl
+    - gnupg-agent
+    - software-properties-common
+    state: present
+    update_cache: yes
+
+- name: Add GPG key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Add docker repository to apt
+  apt_repository:
+    repo: deb https://download.docker.com/linux/ubuntu bionic stable
+    state: present
+
+- name: Install docker
+  apt:
+    name:
+    - docker-ce
+    - docker-ce-cli
+    - containerd.io
+    - docker-buildx-plugin
+    state: latest
+    update_cache: yes
+
+- name: Check docker is active
+  service:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Ensure group "docker" exists
+  ansible.builtin.group:
+    name: docker
+    state: present
+
+- name: Adding user to docker group
+  user:
+    name: "{{ user_name }}"
+    groups: docker
+    append: yes
+
+- name: Install python3-requests
+  apt:
+    name: python3-requests
+    state: present
+
+- name: Copy Dockerfile
+  copy:
+    src: files/Dockerfile
+    dest: "{{ service_path + '/Dockerfile' }}"
+
+- name: Build Docker image
+  community.docker.docker_image:
+    name: "{{ image_name }}"
+    build:
+      path: "{{ service_path }}"
+      dockerfile: Dockerfile
+    source: build
+    state: present
+
+- name: Run Docker container
+  community.docker.docker_container:
+    name: "{{ container_name }}"
+    image: "{{ image_name }}"
+    state: started
+    restart_policy: unless-stopped
+    detach: false
+
+- name: Fetch container info
+  community.docker.docker_container_info:
+    name: "{{ container_name }}"
+  register: container_info
+
+- name: If return code equals 0
+  debug:
+    msg: "Container successfully exited with code 0"
+  when: container_info.container.State.ExitCode == 0
+
+- name: If return code not equals 0
+  fail:
+    msg: "Container exited with code {{ container_info.container.State.ExitCode }}"
+  when: container_info.container.State.ExitCode != 0
+
+- name: Fetch container logs
+  shell: docker logs {{ container_name }}
+  register: container_logs
+
+- name: Output container logs
+  debug:
+    var: container_logs.stderr
